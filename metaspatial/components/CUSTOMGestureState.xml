@@ -1,0 +1,10 @@
+<ComponentSchema packageName="com.iwsdk.components">
+  <Component name="GestureState" description="EliCS component: GestureState">
+    <EnumAttribute name="leftHandGesture"/>
+    <EnumAttribute name="rightHandGesture"/>
+    <EnumAttribute name="swipeDirection"/>
+    <BooleanAttribute name="twoHandActive" defaultValue="false"/>
+    <FloatAttribute name="twoHandDistance" defaultValue="0f"/>
+    <FloatAttribute name="gestureConfidence" defaultValue="0f"/>
+  </Component>
+</ComponentSchema>

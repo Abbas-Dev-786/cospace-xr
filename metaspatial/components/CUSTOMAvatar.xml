@@ -1,0 +1,15 @@
+<ComponentSchema packageName="com.iwsdk.components">
+  <Component name="Avatar" description="EliCS component: Avatar">
+    <StringAttribute name="userId" defaultValue=""/>
+    <Vector3Attribute name="color" defaultValue="0.3f, 0.5f, 0.8f"/>
+    <BooleanAttribute name="isLocal" defaultValue="false"/>
+    <Vector3Attribute name="headPosition" defaultValue="0f, 1.6f, 0f"/>
+    <Vector4Attribute name="headRotation" defaultValue="0f, 0f, 0f, 1f"/>
+    <Vector3Attribute name="leftHandPosition" defaultValue="0f, 0f, 0f"/>
+    <Vector4Attribute name="leftHandRotation" defaultValue="0f, 0f, 0f, 1f"/>
+    <Vector3Attribute name="rightHandPosition" defaultValue="0f, 0f, 0f"/>
+    <Vector4Attribute name="rightHandRotation" defaultValue="0f, 0f, 0f, 1f"/>
+    <EnumAttribute name="status"/>
+    <FloatAttribute name="lastActivityTime" defaultValue="0f"/>
+  </Component>
+</ComponentSchema>
