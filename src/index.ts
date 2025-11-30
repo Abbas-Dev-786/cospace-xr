@@ -34,6 +34,11 @@ const assets: AssetManifest = {
     type: AssetType.Texture,
     priority: "critical",
   },
+  "office-interior": {
+    url: "/assets/office.glb", // Make sure this file exists in public/assets/
+    type: AssetType.GLTF,
+    priority: "critical",
+  },
 };
 
 World.create(document.getElementById("scene-container") as HTMLDivElement, {

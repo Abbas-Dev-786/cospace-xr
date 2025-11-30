@@ -34,7 +34,7 @@ export class TaskBoardSystem extends createSystem(
     },
   },
   {
-    boardPosition: { type: Types.Vec3, default: [0, 1.5, -2.5] },
+    boardPosition: { type: Types.Vec3, default: [0, 1.5, -2.0] },
     columnSpacing: { type: Types.Float32, default: 1.2 }, // meters
     cardSpacing: { type: Types.Float32, default: 0.25 }, // meters
     voiceCommandEnabled: { type: Types.Boolean, default: true },
