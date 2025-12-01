@@ -9,6 +9,8 @@ import {
   PhysicsState,
   PhysicsShapeType,
   AssetManager,
+  Mesh,
+  BufferAttribute,
 } from "@iwsdk/core";
 
 /**
@@ -106,6 +108,29 @@ export class OfficeScene {
 
     // Clone the scene to create an independent instance
     const officeMesh = officeGLTF.scene.clone();
+
+    officeMesh.traverse((child) => {
+      if ((child as any).isMesh) {
+        const mesh = child as Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        const geometry = mesh.geometry;
+
+        // Ensure UV attribute exists (required for mergeGeometries)
+        if (!geometry.attributes.uv) {
+          const count = geometry.attributes.position.count;
+          // Create dummy UVs filled with 0
+          const uvs = new Float32Array(count * 2);
+          geometry.setAttribute("uv", new BufferAttribute(uvs, 2));
+        }
+
+        // Ensure Normal attribute exists (good practice for standard materials)
+        if (!geometry.attributes.normal) {
+          geometry.computeVertexNormals();
+        }
+      }
+    });
 
     // Enable shadows on all meshes in the model
     officeMesh.traverse((child) => {

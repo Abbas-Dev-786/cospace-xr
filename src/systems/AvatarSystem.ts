@@ -69,9 +69,12 @@ export class AvatarSystem extends createSystem(
    * Create visual representation for an avatar
    */
   private createAvatarVisuals(entity: Entity): void {
-    const color = entity.getValue(Avatar, "color");
+    // FIX: Use getVectorView to read the color array
+    const colorView = entity.getVectorView(Avatar, "color");
+
     const material = new MeshStandardMaterial({
-      color: new Color().fromArray(color!),
+      // @ts-ignore - Color.fromArray accepts ArrayLike
+      color: new Color().fromArray(colorView),
       roughness: 0.7,
       metalness: 0.1,
     });
@@ -106,8 +109,13 @@ export class AvatarSystem extends createSystem(
       const headPos = this.player.head.position;
       const headQuat = this.player.head.quaternion;
 
-      entity.setValue(Avatar, "headPosition", headPos.toArray());
-      entity.setValue(Avatar, "headRotation", headQuat.toArray());
+      // FIX: Write to vector views directly instead of using setValue
+      // This prevents the error and optimizes performance (0 allocations)
+      const headPosView = entity.getVectorView(Avatar, "headPosition");
+      const headRotView = entity.getVectorView(Avatar, "headRotation");
+
+      headPos.toArray(headPosView);
+      headQuat.toArray(headRotView);
 
       // Get XR session to check hand tracking availability
       const xrSession = this.world.renderer.xr.getSession();
@@ -118,25 +126,21 @@ export class AvatarSystem extends createSystem(
         const referenceSpace = this.world.renderer.xr.getReferenceSpace();
 
         if (xrFrame && referenceSpace) {
-          // FIX 1: Ensure getJointPose exists (it is optional in WebXR types)
+          // Guard clause for missing hand tracking support
           if (!xrFrame.getJointPose) return;
 
           // Access input sources from XR session
           const inputSources = Array.from(xrSession.inputSources);
 
-          // Find left hand input source
+          // --- LEFT HAND ---
           const leftHandSource = inputSources.find(
             (source) => source.handedness === "left" && source.hand
           );
 
-          // Update left hand if available
           if (leftHandSource && leftHandSource.hand) {
             try {
-              // Get wrist joint for hand position
               const wristJoint = leftHandSource.hand.get("wrist");
-
               if (wristJoint) {
-                // FIX: getJointPose called safely now due to check above
                 const wristPose = xrFrame.getJointPose(
                   wristJoint,
                   referenceSpace
@@ -155,37 +159,34 @@ export class AvatarSystem extends createSystem(
                     wristPose.transform.orientation.w
                   );
 
-                  entity.setValue(
+                  // FIX: Use views for left hand
+                  const leftPosView = entity.getVectorView(
                     Avatar,
-                    "leftHandPosition",
-                    leftHandPos.toArray()
+                    "leftHandPosition"
                   );
-                  entity.setValue(
+                  const leftRotView = entity.getVectorView(
                     Avatar,
-                    "leftHandRotation",
-                    leftHandQuat.toArray()
+                    "leftHandRotation"
                   );
+
+                  leftHandPos.toArray(leftPosView);
+                  leftHandQuat.toArray(leftRotView);
                 }
               }
             } catch (error) {
-              // FIX 2: Removed process.env check to avoid "process not found" error.
-              // We silently ignore tracking errors in the loop for performance.
+              // Ignore tracking errors
             }
           }
 
-          // Find right hand input source
+          // --- RIGHT HAND ---
           const rightHandSource = inputSources.find(
             (source) => source.handedness === "right" && source.hand
           );
 
-          // Update right hand if available
           if (rightHandSource && rightHandSource.hand) {
             try {
-              // Get wrist joint for hand position
               const wristJoint = rightHandSource.hand.get("wrist");
-
               if (wristJoint) {
-                // FIX: getJointPose called safely now due to check above
                 const wristPose = xrFrame.getJointPose(
                   wristJoint,
                   referenceSpace
@@ -204,27 +205,28 @@ export class AvatarSystem extends createSystem(
                     wristPose.transform.orientation.w
                   );
 
-                  entity.setValue(
+                  // FIX: Use views for right hand
+                  const rightPosView = entity.getVectorView(
                     Avatar,
-                    "rightHandPosition",
-                    rightHandPos.toArray()
+                    "rightHandPosition"
                   );
-                  entity.setValue(
+                  const rightRotView = entity.getVectorView(
                     Avatar,
-                    "rightHandRotation",
-                    rightHandQuat.toArray()
+                    "rightHandRotation"
                   );
+
+                  rightHandPos.toArray(rightPosView);
+                  rightHandQuat.toArray(rightRotView);
                 }
               }
             } catch (error) {
-              // FIX 2: Removed process.env check to avoid "process not found" error.
-              // We silently ignore tracking errors in the loop for performance.
+              // Ignore tracking errors
             }
           }
         }
       }
 
-      // Update last activity time
+      // Update last activity time (Scalars use setValue)
       entity.setValue(Avatar, "lastActivityTime", time);
     });
   }
@@ -239,22 +241,21 @@ export class AvatarSystem extends createSystem(
 
     if (!head || !leftHand || !rightHand) return;
 
-    // Update head position and rotation
-    const headPos = entity.getValue(Avatar, "headPosition");
-    const headRot = entity.getValue(Avatar, "headRotation");
-    head.position.fromArray(headPos!);
-    head.quaternion.fromArray(headRot!);
+    // FIX: Read from views for performance
+    const headPos = entity.getVectorView(Avatar, "headPosition");
+    const headRot = entity.getVectorView(Avatar, "headRotation");
+    head.position.fromArray(headPos);
+    head.quaternion.fromArray(headRot);
 
-    // Update hand positions
-    const leftHandPos = entity.getValue(Avatar, "leftHandPosition");
-    const leftHandRot = entity.getValue(Avatar, "leftHandRotation");
-    leftHand.position.fromArray(leftHandPos!);
-    leftHand.quaternion.fromArray(leftHandRot!);
+    const leftHandPos = entity.getVectorView(Avatar, "leftHandPosition");
+    const leftHandRot = entity.getVectorView(Avatar, "leftHandRotation");
+    leftHand.position.fromArray(leftHandPos);
+    leftHand.quaternion.fromArray(leftHandRot);
 
-    const rightHandPos = entity.getValue(Avatar, "rightHandPosition");
-    const rightHandRot = entity.getValue(Avatar, "rightHandRotation");
-    rightHand.position.fromArray(rightHandPos!);
-    rightHand.quaternion.fromArray(rightHandRot!);
+    const rightHandPos = entity.getVectorView(Avatar, "rightHandPosition");
+    const rightHandRot = entity.getVectorView(Avatar, "rightHandRotation");
+    rightHand.position.fromArray(rightHandPos);
+    rightHand.quaternion.fromArray(rightHandRot);
 
     // Apply idle animation (gentle floating)
     const status = entity.getValue(Avatar, "status");
