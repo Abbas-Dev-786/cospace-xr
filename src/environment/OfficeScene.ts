@@ -152,7 +152,7 @@ export class OfficeScene {
 
     // Position the office model at world origin
     if (officeEntity.object3D) {
-      officeEntity.object3D.position.set(0, 0, 0);
+      officeEntity.object3D.position.set(-10, 0, 30);
       officeEntity.object3D.rotation.set(0, 0, 0);
       officeEntity.object3D.scale.set(1, 1, 1);
     }

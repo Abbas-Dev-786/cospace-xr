@@ -1,0 +1,8 @@
+entities:
+  components:
+    com.meta.components.Name:
+      name: texture87
+    com.meta.components.Texture:
+      image: ref:image1
+metadata:
+  version: 1.35

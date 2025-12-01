@@ -1,0 +1,8 @@
+entities:
+  components:
+    com.meta.components.Name:
+      name: texture126
+    com.meta.components.Texture:
+      image: ref:image40
+metadata:
+  version: 1.35

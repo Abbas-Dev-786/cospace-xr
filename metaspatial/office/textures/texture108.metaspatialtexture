@@ -1,0 +1,8 @@
+entities:
+  components:
+    com.meta.components.Name:
+      name: texture108
+    com.meta.components.Texture:
+      image: ref:image22
+metadata:
+  version: 1.35
