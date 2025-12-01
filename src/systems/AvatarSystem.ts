@@ -48,6 +48,8 @@ export class AvatarSystem extends createSystem(
     this.queries.avatars.subscribe("disqualify", (entity) => {
       this.cleanupAvatarVisuals(entity);
     });
+
+    console.log("✅ AvatarSystem initialized");
   }
 
   update(delta: number, time: number) {
@@ -100,30 +102,126 @@ export class AvatarSystem extends createSystem(
    */
   private updateLocalAvatar(delta: number, time: number): void {
     this.queries.localAvatars.entities.forEach((entity) => {
-      // Get XR player head position
+      // Get XR player head position (always available in VR)
       const headPos = this.player.head.position;
       const headQuat = this.player.head.quaternion;
 
       entity.setValue(Avatar, "headPosition", headPos.toArray());
       entity.setValue(Avatar, "headRotation", headQuat.toArray());
 
-      // Get hand tracking data if available
+      // Get XR session to check hand tracking availability
       const xrSession = this.world.renderer.xr.getSession();
 
-      if (xrSession && this.world.input.hands.left) {
-        const leftHandPos = this.world.input.hands.left.position;
-        const leftHandQuat = this.world.input.hands.left.quaternion;
+      // Only update hands if session exists and hand tracking is active
+      if (xrSession) {
+        const xrFrame = this.world.renderer.xr.getFrame();
+        const referenceSpace = this.world.renderer.xr.getReferenceSpace();
 
-        entity.setValue(Avatar, "leftHandPosition", leftHandPos.toArray());
-        entity.setValue(Avatar, "leftHandRotation", leftHandQuat.toArray());
-      }
+        if (xrFrame && referenceSpace) {
+          // FIX 1: Ensure getJointPose exists (it is optional in WebXR types)
+          if (!xrFrame.getJointPose) return;
 
-      if (xrSession && this.world.input.hands.right) {
-        const rightHandPos = this.world.input.hands.right.position;
-        const rightHandQuat = this.world.input.hands.right.quaternion;
+          // Access input sources from XR session
+          const inputSources = Array.from(xrSession.inputSources);
 
-        entity.setValue(Avatar, "rightHandPosition", rightHandPos.toArray());
-        entity.setValue(Avatar, "rightHandRotation", rightHandQuat.toArray());
+          // Find left hand input source
+          const leftHandSource = inputSources.find(
+            (source) => source.handedness === "left" && source.hand
+          );
+
+          // Update left hand if available
+          if (leftHandSource && leftHandSource.hand) {
+            try {
+              // Get wrist joint for hand position
+              const wristJoint = leftHandSource.hand.get("wrist");
+
+              if (wristJoint) {
+                // FIX: getJointPose called safely now due to check above
+                const wristPose = xrFrame.getJointPose(
+                  wristJoint,
+                  referenceSpace
+                );
+
+                if (wristPose) {
+                  const leftHandPos = new Vector3(
+                    wristPose.transform.position.x,
+                    wristPose.transform.position.y,
+                    wristPose.transform.position.z
+                  );
+                  const leftHandQuat = new Quaternion(
+                    wristPose.transform.orientation.x,
+                    wristPose.transform.orientation.y,
+                    wristPose.transform.orientation.z,
+                    wristPose.transform.orientation.w
+                  );
+
+                  entity.setValue(
+                    Avatar,
+                    "leftHandPosition",
+                    leftHandPos.toArray()
+                  );
+                  entity.setValue(
+                    Avatar,
+                    "leftHandRotation",
+                    leftHandQuat.toArray()
+                  );
+                }
+              }
+            } catch (error) {
+              // FIX 2: Removed process.env check to avoid "process not found" error.
+              // We silently ignore tracking errors in the loop for performance.
+            }
+          }
+
+          // Find right hand input source
+          const rightHandSource = inputSources.find(
+            (source) => source.handedness === "right" && source.hand
+          );
+
+          // Update right hand if available
+          if (rightHandSource && rightHandSource.hand) {
+            try {
+              // Get wrist joint for hand position
+              const wristJoint = rightHandSource.hand.get("wrist");
+
+              if (wristJoint) {
+                // FIX: getJointPose called safely now due to check above
+                const wristPose = xrFrame.getJointPose(
+                  wristJoint,
+                  referenceSpace
+                );
+
+                if (wristPose) {
+                  const rightHandPos = new Vector3(
+                    wristPose.transform.position.x,
+                    wristPose.transform.position.y,
+                    wristPose.transform.position.z
+                  );
+                  const rightHandQuat = new Quaternion(
+                    wristPose.transform.orientation.x,
+                    wristPose.transform.orientation.y,
+                    wristPose.transform.orientation.z,
+                    wristPose.transform.orientation.w
+                  );
+
+                  entity.setValue(
+                    Avatar,
+                    "rightHandPosition",
+                    rightHandPos.toArray()
+                  );
+                  entity.setValue(
+                    Avatar,
+                    "rightHandRotation",
+                    rightHandQuat.toArray()
+                  );
+                }
+              }
+            } catch (error) {
+              // FIX 2: Removed process.env check to avoid "process not found" error.
+              // We silently ignore tracking errors in the loop for performance.
+            }
+          }
+        }
       }
 
       // Update last activity time

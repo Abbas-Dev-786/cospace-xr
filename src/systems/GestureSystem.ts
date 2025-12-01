@@ -1,4 +1,5 @@
 import { createSystem, Types, Vector3, Quaternion, Entity } from "@iwsdk/core";
+// Assuming GestureState is defined in your project
 import { GestureState } from "../components/GestureState";
 
 /**
@@ -30,7 +31,7 @@ export class GestureSystem extends createSystem(
   private lastUpdateTime = 0;
 
   init() {
-    console.log("GestureSystem initialized");
+    console.log("✅ GestureSystem initialized");
   }
 
   update(delta: number, time: number) {
@@ -48,25 +49,72 @@ export class GestureSystem extends createSystem(
     const xrSession = this.world.renderer.xr.getSession();
     if (!xrSession) return;
 
-    const leftHand = this.world.input.hands.left;
-    const rightHand = this.world.input.hands.right;
+    // Access input sources from XR session
+    const inputSources = Array.from(xrSession.inputSources);
 
-    if (!leftHand || !rightHand) return;
+    // Find left and right hand input sources
+    const leftHandSource = inputSources.find(
+      (source) => source.handedness === "left" && source.hand
+    );
+    const rightHandSource = inputSources.find(
+      (source) => source.handedness === "right" && source.hand
+    );
+
+    if (!leftHandSource?.hand || !rightHandSource?.hand) {
+      // Hand tracking not available - reset gesture state
+      entity.setValue(GestureState, "leftHandGesture", "none");
+      entity.setValue(GestureState, "rightHandGesture", "none");
+      entity.setValue(GestureState, "swipeDirection", "none");
+      entity.setValue(GestureState, "gestureConfidence", 0);
+      return;
+    }
+
+    // Get XR frame for joint poses
+    const xrFrame = this.world.renderer.xr.getFrame();
+    if (!xrFrame) return;
+
+    // FIX 1: Ensure getJointPose exists on the frame (it is optional in types)
+    if (!xrFrame.getJointPose) return;
+
+    const referenceSpace = this.world.renderer.xr.getReferenceSpace();
+    if (!referenceSpace) return;
 
     // Detect left hand gesture
-    const leftGesture = this.detectHandGesture(leftHand, "left", delta);
+    const leftGesture = this.detectHandGesture(
+      leftHandSource.hand,
+      xrFrame,
+      referenceSpace,
+      "left",
+      delta
+    );
     entity.setValue(GestureState, "leftHandGesture", leftGesture.type);
 
     // Detect right hand gesture
-    const rightGesture = this.detectHandGesture(rightHand, "right", delta);
+    const rightGesture = this.detectHandGesture(
+      rightHandSource.hand,
+      xrFrame,
+      referenceSpace,
+      "right",
+      delta
+    );
     entity.setValue(GestureState, "rightHandGesture", rightGesture.type);
 
     // Detect swipe gestures (using velocity)
-    const swipeDirection = this.detectSwipe(leftHand, rightHand, delta);
+    const swipeDirection = this.detectSwipe(
+      rightHandSource.hand,
+      xrFrame,
+      referenceSpace,
+      delta
+    );
     entity.setValue(GestureState, "swipeDirection", swipeDirection);
 
     // Detect two-hand gestures
-    const twoHandState = this.detectTwoHandGesture(leftHand, rightHand);
+    const twoHandState = this.detectTwoHandGesture(
+      leftHandSource.hand,
+      rightHandSource.hand,
+      xrFrame,
+      referenceSpace
+    );
     entity.setValue(GestureState, "twoHandActive", twoHandState.active);
     entity.setValue(GestureState, "twoHandDistance", twoHandState.distance);
 
@@ -80,46 +128,59 @@ export class GestureSystem extends createSystem(
    */
   private detectHandGesture(
     hand: XRHand,
+    frame: XRFrame,
+    referenceSpace: XRReferenceSpace,
     handedness: "left" | "right",
     delta: number
   ): { type: string; confidence: number } {
-    // Get joint positions using XR
-    // Hand tracking API
+    // FIX 2: Guard clause for TypeScript safety
+    if (!frame.getJointPose) {
+      return { type: "none", confidence: 0 };
+    }
+
+    // Get joint spaces
     const thumbTip = hand.get("thumb-tip");
     const indexTip = hand.get("index-finger-tip");
     const middleTip = hand.get("middle-finger-tip");
     const ringTip = hand.get("ring-finger-tip");
     const pinkyTip = hand.get("pinky-finger-tip");
-    const thumbBase = hand.get("thumb-metacarpal");
-    const indexBase = hand.get("index-finger-metacarpal");
     const wrist = hand.get("wrist");
 
     if (!thumbTip || !indexTip || !middleTip || !wrist) {
       return { type: "none", confidence: 0 };
     }
 
-    // Get world positions
-    const thumbPos = new Vector3();
-    const indexPos = new Vector3();
-    const middlePos = new Vector3();
-    const ringPos = new Vector3();
-    const pinkyPos = new Vector3();
-    const wristPos = new Vector3();
+    // Get joint poses from XRFrame
+    // TS logic: We checked frame.getJointPose above, so this call is now safe.
+    const thumbPose = frame.getJointPose(thumbTip, referenceSpace);
+    const indexPose = frame.getJointPose(indexTip, referenceSpace);
+    const middlePose = frame.getJointPose(middleTip, referenceSpace);
+    const wristPose = frame.getJointPose(wrist, referenceSpace);
 
-    thumbTip.getWorldPosition(thumbPos);
-    indexTip.getWorldPosition(indexPos);
-    middleTip.getWorldPosition(middlePos);
-    ringTip?.getWorldPosition(ringPos);
-    pinkyTip?.getWorldPosition(pinkyPos);
-    wrist.getWorldPosition(wristPos);
+    if (!thumbPose || !indexPose || !middlePose || !wristPose) {
+      return { type: "none", confidence: 0 };
+    }
 
-    // Calculate finger curl values (0 = extended, 1 = curled)
-    const thumbCurl = this.calculateFingerCurl(thumbTip, thumbBase, wristPos);
-    const indexCurl = this.calculateFingerCurl(indexTip, indexBase, wristPos);
-    const middleCurl = this.calculateFingerCurl(
-      middleTip,
-      hand.get("middle-finger-metacarpal"),
-      wristPos
+    // Convert XR poses to Three.js Vector3
+    const thumbPos = new Vector3(
+      thumbPose.transform.position.x,
+      thumbPose.transform.position.y,
+      thumbPose.transform.position.z
+    );
+    const indexPos = new Vector3(
+      indexPose.transform.position.x,
+      indexPose.transform.position.y,
+      indexPose.transform.position.z
+    );
+    const middlePos = new Vector3(
+      middlePose.transform.position.x,
+      middlePose.transform.position.y,
+      middlePose.transform.position.z
+    );
+    const wristPos = new Vector3(
+      wristPose.transform.position.x,
+      wristPose.transform.position.y,
+      wristPose.transform.position.z
     );
 
     // PINCH DETECTION: Thumb and index distance < threshold
@@ -127,6 +188,11 @@ export class GestureSystem extends createSystem(
     if (pinchDistance < this.config.pinchThreshold.value) {
       return { type: "pinch-grab", confidence: 0.95 };
     }
+
+    // Calculate finger curl values (0 = extended, 1 = curled)
+    const indexCurl = this.calculateFingerCurl(indexPos, wristPos);
+    const middleCurl = this.calculateFingerCurl(middlePos, wristPos);
+    const thumbCurl = this.calculateFingerCurl(thumbPos, wristPos);
 
     // PALM OPEN: All fingers extended
     if (thumbCurl < 0.3 && indexCurl < 0.3 && middleCurl < 0.3) {
@@ -145,46 +211,46 @@ export class GestureSystem extends createSystem(
 
     return { type: "none", confidence: 0 };
   }
+
   /**
+   * Calculate finger curl based on joint positions
+   * Returns 0 (fully extended) to 1 (fully curled)
+   */
+  private calculateFingerCurl(tipPos: Vector3, wristPos: Vector3): number {
+    // Simple distance-based curl calculation
+    const distance = tipPos.distanceTo(wristPos);
 
-Calculate finger curl based on joint positions
-Returns 0 (fully extended) to 1 (fully curled)
-*/
-  private calculateFingerCurl(
-    tip: XRJoint,
-    base: XRJoint,
-    wristPos: Vector3
-  ): number {
-    const tipPos = new Vector3();
-    const basePos = new Vector3();
+    // Normalize: typical extended finger ~0.15m, curled ~0.08m
+    const normalizedDistance = (distance - 0.08) / (0.15 - 0.08);
 
-    tip.getWorldPosition(tipPos);
-    base.getWorldPosition(basePos);
-
-    // Calculate angle between finger vector and hand normal
-    const fingerVector = new Vector3().subVectors(tipPos, basePos).normalize();
-    const wristToBase = new Vector3().subVectors(basePos, wristPos).normalize();
-
-    const dot = fingerVector.dot(wristToBase);
-
-    // Convert to curl value (0-1)
-    return (1 - dot) / 2;
+    // Invert and clamp: 0 = extended, 1 = curled
+    return Math.max(0, Math.min(1, 1 - normalizedDistance));
   }
-  /**
 
-Detect swipe gestures from hand velocity
-*/
+  /**
+   * Detect swipe gestures from hand velocity
+   */
   private detectSwipe(
-    leftHand: XRHand,
-    rightHand: XRHand,
+    hand: XRHand,
+    frame: XRFrame,
+    referenceSpace: XRReferenceSpace,
     delta: number
   ): string {
-    // Use right hand for swipe detection (dominant hand)
-    const wrist = rightHand.get("wrist");
+    // FIX 3: Guard clause for detectSwipe
+    if (!frame.getJointPose) return "none";
+
+    // Use wrist for swipe detection
+    const wrist = hand.get("wrist");
     if (!wrist) return "none";
 
-    const currentPos = new Vector3();
-    wrist.getWorldPosition(currentPos);
+    const wristPose = frame.getJointPose(wrist, referenceSpace);
+    if (!wristPose) return "none";
+
+    const currentPos = new Vector3(
+      wristPose.transform.position.x,
+      wristPose.transform.position.y,
+      wristPose.transform.position.z
+    );
 
     // Calculate velocity
     const velocity = new Vector3()
@@ -200,11 +266,13 @@ Detect swipe gestures from hand velocity
         Math.abs(velocity.x) > Math.abs(velocity.y) &&
         Math.abs(velocity.x) > Math.abs(velocity.z)
       ) {
+        this.prevRightHandPos.copy(currentPos);
         return velocity.x > 0 ? "right" : "left";
       } else if (
         Math.abs(velocity.y) > Math.abs(velocity.x) &&
         Math.abs(velocity.y) > Math.abs(velocity.z)
       ) {
+        this.prevRightHandPos.copy(currentPos);
         return velocity.y > 0 ? "up" : "down";
       }
     }
@@ -214,14 +282,21 @@ Detect swipe gestures from hand velocity
 
     return "none";
   }
-  /**
 
-Detect two-hand gestures for resizing
-*/
+  /**
+   * Detect two-hand gestures for resizing
+   */
   private detectTwoHandGesture(
     leftHand: XRHand,
-    rightHand: XRHand
+    rightHand: XRHand,
+    frame: XRFrame,
+    referenceSpace: XRReferenceSpace
   ): { active: boolean; distance: number } {
+    // FIX 4: Guard clause for detectTwoHandGesture
+    if (!frame.getJointPose) {
+      return { active: false, distance: 0 };
+    }
+
     const leftThumb = leftHand.get("thumb-tip");
     const leftIndex = leftHand.get("index-finger-tip");
     const rightThumb = rightHand.get("thumb-tip");
@@ -231,15 +306,42 @@ Detect two-hand gestures for resizing
       return { active: false, distance: 0 };
     }
 
-    const leftThumbPos = new Vector3();
-    const leftIndexPos = new Vector3();
-    const rightThumbPos = new Vector3();
-    const rightIndexPos = new Vector3();
+    // Get poses
+    const leftThumbPose = frame.getJointPose(leftThumb, referenceSpace);
+    const leftIndexPose = frame.getJointPose(leftIndex, referenceSpace);
+    const rightThumbPose = frame.getJointPose(rightThumb, referenceSpace);
+    const rightIndexPose = frame.getJointPose(rightIndex, referenceSpace);
 
-    leftThumb.getWorldPosition(leftThumbPos);
-    leftIndex.getWorldPosition(leftIndexPos);
-    rightThumb.getWorldPosition(rightThumbPos);
-    rightIndex.getWorldPosition(rightIndexPos);
+    if (
+      !leftThumbPose ||
+      !leftIndexPose ||
+      !rightThumbPose ||
+      !rightIndexPose
+    ) {
+      return { active: false, distance: 0 };
+    }
+
+    // Convert to Vector3
+    const leftThumbPos = new Vector3(
+      leftThumbPose.transform.position.x,
+      leftThumbPose.transform.position.y,
+      leftThumbPose.transform.position.z
+    );
+    const leftIndexPos = new Vector3(
+      leftIndexPose.transform.position.x,
+      leftIndexPose.transform.position.y,
+      leftIndexPose.transform.position.z
+    );
+    const rightThumbPos = new Vector3(
+      rightThumbPose.transform.position.x,
+      rightThumbPose.transform.position.y,
+      rightThumbPose.transform.position.z
+    );
+    const rightIndexPos = new Vector3(
+      rightIndexPose.transform.position.x,
+      rightIndexPose.transform.position.y,
+      rightIndexPose.transform.position.z
+    );
 
     // Check if both hands are pinching
     const leftPinch =
