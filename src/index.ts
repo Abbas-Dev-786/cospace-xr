@@ -84,7 +84,7 @@ World.create(document.getElementById("scene-container") as HTMLDivElement, {
   //    (Adjust X/Z if your office model isn't centered at 0,0)
   // 2. Lift Player (Y=0.5): Spawning slightly above floor prevents falling through
   //    before physics collision is calculated.
-  world.player.position.set(0, 0.5, 0);
+  world.player.position.set(0, 1, 0);
 
   // Optional: Rotate player to face a specific direction (e.g., face the whiteboard)
   // world.player.rotation.set(0, 0, 0, 1);
